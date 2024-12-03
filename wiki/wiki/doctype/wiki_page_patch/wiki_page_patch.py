@@ -9,12 +9,16 @@ from frappe import _
 from frappe.desk.form.utils import add_comment
 from frappe.model.document import Document
 from frappe.website.utils import cleanup_page_name
+from ghdiff import diff
 
 
 class WikiPagePatch(Document):
-	def before_save(self):
+	def validate(self):
+		self.new_preview_store = frappe.utils.md_to_html(self.new_code)
 		if not self.new:
 			self.orignal_code = frappe.db.get_value("Wiki Page", self.wiki_page, "content")
+			self.diff = diff(self.orignal_code, self.new_code)
+			self.orignal_preview_store = frappe.utils.md_to_html(self.orignal_code)
 
 	def after_insert(self):
 		add_comment_to_patch(self.name, self.message)

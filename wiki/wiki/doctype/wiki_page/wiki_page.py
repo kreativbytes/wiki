@@ -260,8 +260,14 @@ class WikiPage(WebsiteGenerator):
 		context.hide_login = True
 		context.name = self.name
 		if (frappe.form_dict.editWiki or frappe.form_dict.newWiki) and frappe.form_dict.wikiPagePatch:
-			context.patch_new_code, context.patch_new_title = frappe.db.get_value(
-				"Wiki Page Patch", frappe.form_dict.wikiPagePatch, ["new_code", "new_title"]
+			(
+				context.patch_new_code,
+				context.patch_new_title,
+				context.new_sidebar_group,
+			) = frappe.db.get_value(
+				"Wiki Page Patch",
+				frappe.form_dict.wikiPagePatch,
+				["new_code", "new_title", "new_sidebar_group"],
 			)
 		context = context.update(
 			{
@@ -392,10 +398,19 @@ def get_open_drafts():
 
 
 @frappe.whitelist()
-def preview(original_code, new_code, name):
-	from lxml.html.diff import htmldiff
+def preview(content, name, new, type, diff_css=False):
+	html = frappe.utils.md_to_html(content)
+	if new:
+		return {"html": html}
+	from ghdiff import diff
 
-	return htmldiff(original_code, new_code)
+	old_content = frappe.db.get_value("Wiki Page", name, "content")
+	diff = diff(old_content, content, css=diff_css)
+	return {
+		"html": html,
+		"diff": diff,
+		"orignal_preview": frappe.utils.md_to_html(old_content),
+	}
 
 
 @frappe.whitelist()
@@ -446,6 +461,7 @@ def update(
 	new_sidebar="",
 	new_sidebar_items="",
 	draft=False,
+	new_sidebar_group="",
 ):
 
 	context = {"route": name}
@@ -463,7 +479,9 @@ def update(
 		patch.status = status
 		patch.message = message
 		patch.new = new
+		patch.new_sidebar = new_sidebar
 		patch.new_sidebar_items = new_sidebar_items
+		patch.new_sidebar_group = new_sidebar_group
 		patch.save()
 
 	else:
@@ -478,6 +496,7 @@ def update(
 			"new": new,
 			"new_title": title,
 			"new_sidebar_items": new_sidebar_items,
+			"new_sidebar_group": new_sidebar_group,
 		}
 
 		patch.update(patch_dict)
